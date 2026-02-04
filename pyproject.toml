@@ -1,0 +1,32 @@
+[project]
+name = "hyperdspy"
+version = "0.1.0"
+description = "Hyperliquid DS Python System"
+readme = "README.md"
+authors = [{ name = "Martin", email = "martin@tripudium.tech" }]
+requires-python = ">=3.13"
+dependencies = [
+    "hyperliquid-python-sdk>=0.21.0",
+    "ipykernel>=6.29.5",
+    "ipython==8.32.0",
+]
+
+[project.optional-dependencies]
+dev = ["jupyterlab", "ipykernel"]
+
+[project.scripts]
+dspy = "hyperdspy:main"
+
+[tool.uv]
+dev-dependencies = ["pytest", "ruff>=0.9.9"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "--maxfail=1 --disable-warnings -q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I"] # Enable standard, pyflakes & import-sorting rules
