@@ -1,2 +1,4 @@
-# hyperdspy
+# HyperDSPY
+
 Hyperliquid trading framework
+
