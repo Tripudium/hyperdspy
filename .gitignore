@@ -41,3 +41,8 @@ data/tardis/
 hyperliquid-python-sdk/
 
 # Old scripts
+
+# Claude related
+.auto-claude/
+.claude/
+CLAUDE.md
