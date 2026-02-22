@@ -20,6 +20,16 @@ class TradingConfig:
 
 
 @dataclass(frozen=True)
+class RecordingConfig:
+    enabled: bool = False
+    output_dir: str = "data"
+    format: str = "jsonl"  # "jsonl" or "csv"
+    record_l2: bool = True
+    record_l4: bool = True
+    record_trades: bool = True
+
+
+@dataclass(frozen=True)
 class Config:
     wallet: WalletConfig
     trading: TradingConfig
@@ -27,6 +37,8 @@ class Config:
     paper_mode: bool = False
     log_level: str = "INFO"
     tick_interval_s: float = 1.0
+    l4_server_url: Optional[str] = None  # e.g. "ws://localhost:8000/ws"
+    recording: RecordingConfig = field(default_factory=RecordingConfig)
 
 
 def load_config(path: Path = Path("config.json")) -> Config:
@@ -51,6 +63,16 @@ def load_config(path: Path = Path("config.json")) -> Config:
         max_position_usd=raw.get("max_position_usd", 1000.0),
     )
 
+    rec_raw = raw.get("recording", {})
+    recording = RecordingConfig(
+        enabled=rec_raw.get("enabled", False),
+        output_dir=rec_raw.get("output_dir", "data"),
+        format=rec_raw.get("format", "jsonl"),
+        record_l2=rec_raw.get("record_l2", True),
+        record_l4=rec_raw.get("record_l4", True),
+        record_trades=rec_raw.get("record_trades", True),
+    )
+
     return Config(
         wallet=wallet,
         trading=trading,
@@ -58,4 +80,6 @@ def load_config(path: Path = Path("config.json")) -> Config:
         paper_mode=raw.get("paper_mode", False),
         log_level=raw.get("log_level", "INFO"),
         tick_interval_s=raw.get("tick_interval_s", 1.0),
+        l4_server_url=raw.get("l4_server_url"),
+        recording=recording,
     )

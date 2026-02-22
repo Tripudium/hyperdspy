@@ -173,3 +173,64 @@ class StrategyDecision:
     coin: str
     desired_orders: list[DesiredOrder]
     cancel_all_first: bool = True
+
+
+# --- L4 (individual order-level) types ---
+
+
+@dataclass(frozen=True)
+class L4Order:
+    """A single individual order in the L4 order book."""
+
+    oid: int
+    user: str  # wallet address
+    price: Decimal
+    size: Decimal
+    side: Side
+
+    @staticmethod
+    def from_raw(raw: dict, side: Side) -> L4Order:
+        return L4Order(
+            oid=raw["oid"],
+            user=raw.get("user", ""),
+            price=Decimal(raw["limitPx"]),
+            size=Decimal(raw["sz"]),
+            side=side,
+        )
+
+
+@dataclass(frozen=True)
+class L4BookSnapshot:
+    """Full L4 order book state for a single coin.
+
+    Unlike L2 which aggregates by price level, L4 shows every individual order
+    with its owner's wallet address. Requires a Hyperliquid order_book_server.
+    """
+
+    coin: str
+    bids: dict[Decimal, tuple[L4Order, ...]]  # price -> orders at that level
+    asks: dict[Decimal, tuple[L4Order, ...]]
+    timestamp_ms: int
+
+    @property
+    def best_bid(self) -> Optional[Decimal]:
+        return max(self.bids.keys()) if self.bids else None
+
+    @property
+    def best_ask(self) -> Optional[Decimal]:
+        return min(self.asks.keys()) if self.asks else None
+
+    @property
+    def mid_price(self) -> Optional[Decimal]:
+        bb, ba = self.best_bid, self.best_ask
+        if bb is not None and ba is not None:
+            return (bb + ba) / 2
+        return None
+
+    @property
+    def total_bid_size(self) -> Decimal:
+        return sum((o.size for orders in self.bids.values() for o in orders), Decimal("0"))
+
+    @property
+    def total_ask_size(self) -> Decimal:
+        return sum((o.size for orders in self.asks.values() for o in orders), Decimal("0"))

@@ -33,6 +33,20 @@ class Engine:
         self._running = threading.Event()
         self._setup_logging()
 
+        # Optional components
+        self.l4_client = None
+        self.recorder = None
+
+        if config.l4_server_url:
+            from hyperdspy.l4_client import L4Client
+
+            self.l4_client = L4Client(config.l4_server_url)
+
+        if config.recording.enabled:
+            from hyperdspy.recorder import DataRecorder
+
+            self.recorder = DataRecorder(config.recording)
+
     def _setup_logging(self):
         logging.basicConfig(
             level=getattr(logging, self.config.log_level.upper(), logging.INFO),
@@ -60,6 +74,18 @@ class Engine:
         for coin in coins:
             self._subscribe_book(coin)
 
+        # Subscribe to trades (for recording)
+        if self.recorder and self.config.recording.record_trades:
+            for coin in coins:
+                self._subscribe_trades(coin)
+
+        # Start L4 client if configured
+        if self.l4_client:
+            self.l4_client.start()
+            for coin in coins:
+                self.l4_client.subscribe(coin, self._on_l4_update)
+            logger.info(f"L4 client started: {self.config.l4_server_url}")
+
         # Subscribe to user events (live mode only)
         if not self.config.paper_mode:
             address = self.config.wallet.account_address
@@ -81,7 +107,7 @@ class Engine:
         self._running.clear()
 
     def shutdown(self):
-        """Clean shutdown: cancel all orders, disconnect."""
+        """Clean shutdown: cancel all orders, disconnect, close recorder."""
         logger.info("Shutting down engine...")
         if self.strategy:
             self.strategy.on_stop()
@@ -91,6 +117,19 @@ class Engine:
                 self.order_manager.cancel_all(coin)
             except Exception:
                 logger.exception(f"Error cancelling orders for {coin}")
+
+        if self.l4_client:
+            try:
+                self.l4_client.stop()
+            except Exception:
+                logger.exception("Error stopping L4 client")
+
+        if self.recorder:
+            try:
+                self.recorder.close()
+                logger.info("Data recorder closed.")
+            except Exception:
+                logger.exception("Error closing recorder")
 
         try:
             self.gateway.shutdown()
@@ -195,10 +234,36 @@ class Engine:
         def on_l2_update(msg):
             try:
                 self.orderbook.update(msg["data"])
+                if self.recorder:
+                    book = self.orderbook.get(coin)
+                    if book:
+                        self.recorder.record_l2(coin, book)
             except Exception:
                 logger.exception("Error processing L2 update")
 
         self.gateway.subscribe_l2(coin, on_l2_update)
+
+    def _subscribe_trades(self, coin: str):
+        """Subscribe to trade events for recording."""
+
+        def on_trade(msg):
+            try:
+                trades = msg.get("data", [])
+                if self.recorder:
+                    for trade in trades:
+                        self.recorder.record_trade(coin, trade)
+            except Exception:
+                logger.exception("Error processing trade")
+
+        self.gateway.subscribe_trades(coin, on_trade)
+
+    def _on_l4_update(self, coin: str, raw_msg: dict):
+        """L4 client callback -- records raw L4 data."""
+        if self.recorder:
+            try:
+                self.recorder.record_l4(coin, raw_msg)
+            except Exception:
+                logger.exception("Error recording L4 data")
 
     def _on_user_fills(self, msg):
         try:
